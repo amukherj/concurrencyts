@@ -13,21 +13,15 @@ struct Foo {
 };
 
 int main() {
-  // concurrencyts::future<int> f{10};
-  std::shared_ptr<concurrencyts::detail::future_state<int>> fs =
-    std::make_shared<concurrencyts::detail::future_state<int>>();
-  concurrencyts::future<int> f{fs};
+  concurrencyts::promise<int> promise;
+  auto f = promise.get_future();
 
-  std::thread thr([fs] {
+  std::thread thr([&promise] {
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    fs->emplace(10);
+    promise.set(10);
   });
   thr.detach();
 
   f.wait();
   std::cout << f.then(Foo{}, 20).get() << '\n';
-
-  /* cout << f.then(foo, 20).get() << '\n';
-  cout << f.then([](int arg, int f1) ->double { return 3.14159259 + arg + f1; }, 20).get() << '\n';
-  cout << f.then(Foo{}, 20).get() << '\n'; */
 }

@@ -1,8 +1,10 @@
 #ifndef CONCURRENCYTS_FUTURE_H
 #define CONCURRENCYTS_FUTURE_H
 
+#include <cassert>
 #include <condition_variable>
 #include <functional>
+#include <memory>
 #include <mutex>
 
 namespace concurrencyts {
@@ -21,6 +23,7 @@ namespace concurrencyts {
       template <typename... Args>
       void emplace(Args&&... args) {
         std::unique_lock<std::mutex> ul(mtx);
+        assert(!is_set);
 
         try {
           new (&data) T{std::forward<Args>(args)...};
@@ -33,7 +36,7 @@ namespace concurrencyts {
       }
 
       template <typename E>
-      void set_exception(E& exc) {
+      void set_exception(E& exc) noexcept {
         std::unique_lock<std::mutex> ul;
         eptr = std::make_exception_ptr(exc);
         is_set = true;
@@ -114,8 +117,33 @@ namespace concurrencyts {
   template <typename T>
   class promise {
   public:
+    using state_type = detail::future_state<T>;
+
+    promise() : shared_state{std::make_shared<detail::future_state<T>>()} {}
+
+    promise(const promise&) = delete;
+    promise& operator=(const promise&) = delete;
+
+    promise(promise&&) = default;
+    promise& operator=(promise&&) = default;
+
+    future<T> get_future() {
+      // ideally: abort if called more than once
+      return future<T>{shared_state};
+    }
+
+    void set(T value) {
+      // ideally: abort if called more than once
+      shared_state->emplace(std::move(value));
+    }
+
+    template <typename E>
+    void set_exception(E& exc) noexcept {
+      shared_state->set_exception(exc);
+    }
 
   private:
+    std::shared_ptr<state_type> shared_state;
   };
 }
 
