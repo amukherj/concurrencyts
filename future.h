@@ -3,177 +3,179 @@
 
 #include <cassert>
 #include <condition_variable>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
 
 namespace concurrencyts {
 
-  namespace detail {
-    template <typename T>
-    class future_state {
-    public:
-      future_state() : is_set{false} {}
+// shared state for futures and promises
+template <typename T>
+class future_state {
+public:
+  using storage_type = typename std::aligned_storage<sizeof(T), alignof(T)>::type;
 
-      future_state(const future_state&) = delete;
-      future_state& operator=(const future_state&) = delete;
-      future_state(future_state&&) = delete;
-      future_state& operator=(future_state&&) = delete;
+  future_state() : is_available(false), is_complete(false) {}
 
-      template <typename... Args>
-      void emplace(Args&&... args) {
-        std::unique_lock<std::mutex> ul(mtx);
-        assert(!is_set);
+  future_state(const future_state& that) = delete; 
+  future_state& operator=(const future_state& that) = delete; 
+  future_state(future_state&& that) = delete; 
+  future_state& operator=(future_state&& that) = delete; 
 
-        try {
-          new (&data) T{std::forward<Args>(args)...};
-        } catch (...) {
-          eptr = std::current_exception();
-        }
-
-        is_set = true;
-        available.notify_all();
-      }
-
-      template <typename E>
-      void set_exception(E&& exc) noexcept {
-        std::unique_lock<std::mutex> ul;
-        eptr = std::make_exception_ptr(exc);
-        is_set = true;
-        available.notify_all();
-      }
-
-      ~future_state() {
-        reinterpret_cast<T*>(&data)->~T();
-      }
-
-      T& get() {
-        std::unique_lock<std::mutex> ul(mtx);
-        if (!is_set) {
-          available.wait(ul, [this]() -> bool { return is_set; });
-        }
-
-        if (eptr) {
-          std::rethrow_exception(eptr);
-        }
-
-        return reinterpret_cast<T&>(data);
-      }
-
-      void wait() {
-        std::unique_lock<std::mutex> ul(mtx);
-        if (!is_set) {
-          available.wait(ul, [this]() -> bool { return is_set; });
-        }
-      }
-
-    protected:
-      using storage_type = typename std::aligned_storage<sizeof(T),
-        alignof(T)>::type;
-      std::mutex mtx;
-      std::condition_variable available;
-      bool is_set;
-      storage_type data;
-      std::exception_ptr eptr;
-    };
+  ~future_state() {
+    if (is_available) {
+      reinterpret_cast<T*>(&data)->~T();
+    }
   }
 
-  template <typename T>
-  class future {
-  public:
-    using state_type = detail::future_state<T>;
-    future(std::shared_ptr<state_type> state) : shared_state(state) {}
+  // setters
+  template <typename... Args>
+  void emplace(Args&&... args) {
+    std::unique_lock<std::mutex> ul(mtx);
+    assert(!is_available && !is_complete);
+    try {
+      new (reinterpret_cast<T*>(&data)) T{std::forward<Args&&>(args)...};
+      is_available = true;
+    } catch (...) {
+      eptr = std::current_exception();
+    }
+    is_complete = true;
+    ul.unlock();
 
-    future(const future&) = delete;
-    future& operator=(const future&) = delete;
-    future(future&&) = default;
-    future& operator=(future&&) = default;
+    completed.notify_all();
+  }
 
-    T get() {
-      return shared_state->get();
+  template <typename E>
+  void set_exception(E&& exc) {
+    std::unique_lock<std::mutex> ul(mtx);
+    assert(!is_available && !is_complete);
+    eptr = std::make_exception_ptr(std::forward<E>(exc));
+    is_complete = true;
+    ul.unlock();
+
+    completed.notify_all();
+  }
+
+  // getters
+  T& get() {
+    std::unique_lock<std::mutex> ul(mtx);
+    completed.wait(ul, [this]()->bool { return is_complete; });
+
+    if (eptr) {
+      std::rethrow_exception(eptr);
     }
 
-    void wait() { shared_state->wait(); }
+    return *(reinterpret_cast<T*>(&data));
+  }
 
-    template <typename F, typename... Args>
-    auto then(F callable, Args&&... args) 
-      -> future<typename std::result_of<F(T, Args...)>::type>
-    {
-      using ret_type = typename std::result_of<F(T, Args...)>::type;
+  void wait() {
+    std::unique_lock<std::mutex> ul(mtx);
+    completed.wait(ul, [this]()->bool { return is_complete; });
 
-      std::shared_ptr<concurrencyts::detail::future_state<ret_type>> fs =
-        std::make_shared<concurrencyts::detail::future_state<ret_type>>();
-      concurrencyts::future<ret_type> fut{fs};
-
-      // promise<ret_type> promise;
-      std::thread thr([&fs, &callable, &args...] (future<T> fut) {
-        auto val = callable(fut.get(), std::forward<Args>(args)...);
-        fs->emplace(val);
-        // promise.set(val);
-      }, std::move(*this));
-      thr.detach();
-
-      // return promise.get_future();
-      return fut;
+    if (eptr) {
+      std::rethrow_exception(eptr);
     }
+  }
 
-  private:
-    std::shared_ptr<state_type> shared_state;
-  };
+private:
+  std::condition_variable completed;
+  std::mutex mtx;
+  storage_type data;
+  bool is_available;
+  bool is_complete;
+  std::exception_ptr eptr;
+};
 
-  template <typename T>
-  class promise {
-  public:
-    using state_type = detail::future_state<T>;
+template <typename T>
+class future {
+public:
+  future(std::shared_ptr<future_state<T>> state) : shared_state(state) {}
 
-    promise() : shared_state{std::make_shared<detail::future_state<T>>()} {}
+  future(const future&) = delete;
+  future& operator=(const future&) = delete;
+  future(future&&) = default;
+  future& operator=(future&&) = default;
 
-    promise(const promise&) = delete;
-    promise& operator=(const promise&) = delete;
+  void wait() {
+    shared_state->wait();
+  }
 
-    promise(promise&&) = default;
-    promise& operator=(promise&&) = default;
-
-    future<T> get_future() {
-      // ideally: abort if called more than once
-      return future<T>{shared_state};
-    }
-
-    void set(T value) {
-      // ideally: abort if called more than once
-      shared_state->emplace(std::move(value));
-    }
-
-    template <typename E>
-    void set_exception(E&& exc) noexcept {
-      shared_state->set_exception(exc);
-    }
-
-  private:
-    std::shared_ptr<state_type> shared_state;
-  };
+  T& get() {
+    return shared_state->get();
+  }
 
   template <typename F, typename... Args>
-  auto async(F&& f, Args&&... args) -> future<std::result_of_t<F(Args...)>> {
-    using ret_type = std::result_of_t<F(Args...)>;
-    promise<ret_type> promise;
+  auto then(F&& callable, Args&&... args) ->
+      future<std::result_of_t<F(T, Args&&...)>>
+  {
+    using ret_type = std::result_of_t<F(T, Args&&...)>;
+    auto next_state = std::make_shared<future_state<ret_type>>();
+    future<ret_type> ret(next_state);
 
-    // f and args should really be captured via perfect capture,
-    // but since that's not available till C++20, don't want to
-    // jump through hoops. So [&f, &args...] works with limitations for now.
-    std::thread thr([&promise, &f, &args...] {
+    std::thread t([ss = next_state, &callable, &args...](future<T> f) {
       try {
-        promise.set(f(std::forward<Args&&>(args)...));
+        ss->emplace(callable(f.get(), std::forward<Args&&>(args)...));
       } catch (std::exception& e) {
-        promise.set_exception(e);
-      } catch (...) {
-        promise.set_exception(std::runtime_error("Unknown exception"));
+        ss->set_exception(e);
       }
-    });
-    thr.detach();
-    return promise.get_future();
+    }, std::move(*this));
+    t.detach();
+
+    return ret;
   }
+
+private:
+  std::shared_ptr<future_state<T>> shared_state;
+};
+
+template <typename T>
+class promise {
+public:
+  promise() : shared_state(std::make_shared<future_state<T>>()) {}
+
+  promise(const promise&) = delete;
+  promise& operator=(const promise&) = delete;
+  promise(promise&&) = default;
+  promise& operator=(promise&&) = default;
+
+  future<T> get_future() {
+    return future<T>(shared_state);
+  }
+
+  template <typename... Args>
+  void set(Args&&... args) {
+    shared_state->emplace(std::forward<Args&&>(args)...);
+  }
+
+  template <typename E>
+  void set_exception(E&& exc) {
+    shared_state->set_exception(std::forward<E>(exc));
+  }
+
+private:
+  std::shared_ptr<future_state<T>> shared_state;
+};
+
+template <typename F, typename... Args>
+auto async(F&& callable, Args&&... args) -> 
+    future<typename std::result_of_t<F(Args&&...)>>
+{
+  using ret_type = typename std::result_of_t<F(Args&&...)>;
+  promise<ret_type> prom;
+  auto fut = prom.get_future();
+
+  std::thread t([&callable, &args...](promise<ret_type> promise) {
+    try {
+      promise.set(callable(std::forward<Args&&>(args)...));
+    } catch (std::exception& e) {
+      promise.set_exception(e);
+    }
+  }, std::move(prom));
+  t.detach();
+
+  return fut;
 }
+
+} // namespace concurrencyts
 
 #endif /* CONCURRENCYTS_FUTURE_H */
