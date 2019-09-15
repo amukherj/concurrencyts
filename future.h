@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 namespace concurrencyts {
 
@@ -36,7 +37,7 @@ namespace concurrencyts {
       }
 
       template <typename E>
-      void set_exception(E& exc) noexcept {
+      void set_exception(E&& exc) noexcept {
         std::unique_lock<std::mutex> ul;
         eptr = std::make_exception_ptr(exc);
         is_set = true;
@@ -100,14 +101,21 @@ namespace concurrencyts {
       -> future<typename std::result_of<F(T, Args...)>::type>
     {
       using ret_type = typename std::result_of<F(T, Args...)>::type;
-      auto f = callable(shared_state->get(), std::forward<Args>(args)...);
 
       std::shared_ptr<concurrencyts::detail::future_state<ret_type>> fs =
         std::make_shared<concurrencyts::detail::future_state<ret_type>>();
-      concurrencyts::future<ret_type> f1{fs};
-      fs->emplace(f);
+      concurrencyts::future<ret_type> fut{fs};
 
-      return f1;
+      // promise<ret_type> promise;
+      std::thread thr([&fs, &callable, &args...] (future<T> fut) {
+        auto val = callable(fut.get(), std::forward<Args>(args)...);
+        fs->emplace(val);
+        // promise.set(val);
+      }, std::move(*this));
+      thr.detach();
+
+      // return promise.get_future();
+      return fut;
     }
 
   private:
@@ -138,13 +146,34 @@ namespace concurrencyts {
     }
 
     template <typename E>
-    void set_exception(E& exc) noexcept {
+    void set_exception(E&& exc) noexcept {
       shared_state->set_exception(exc);
     }
 
   private:
     std::shared_ptr<state_type> shared_state;
   };
+
+  template <typename F, typename... Args>
+  auto async(F&& f, Args&&... args) -> future<std::result_of_t<F(Args...)>> {
+    using ret_type = std::result_of_t<F(Args...)>;
+    promise<ret_type> promise;
+
+    // f and args should really be captured via perfect capture,
+    // but since that's not available till C++20, don't want to
+    // jump through hoops. So [&f, &args...] works with limitations for now.
+    std::thread thr([&promise, &f, &args...] {
+      try {
+        promise.set(f(std::forward<Args&&>(args)...));
+      } catch (std::exception& e) {
+        promise.set_exception(e);
+      } catch (...) {
+        promise.set_exception(std::runtime_error("Unknown exception"));
+      }
+    });
+    thr.detach();
+    return promise.get_future();
+  }
 }
 
 #endif /* CONCURRENCYTS_FUTURE_H */
