@@ -12,9 +12,12 @@ public:
   void arrive_and_wait();
 
 private:
+  const size_t max_count;
   std::mutex lock;
-  size_t count;
+  std::condition_variable allow;
   std::condition_variable done;
+  size_t count;
+  size_t released_count;
 };
 
 }
