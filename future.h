@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 namespace concurrencyts {
 
@@ -178,6 +179,37 @@ auto async(F&& callable, Args&&... args) ->
 
 // 
 //
+template <typename InputIt>
+auto when_all(InputIt begin, InputIt end)
+  -> future<std::vector<typename std::iterator_traits<InputIt>::value_type>> {
+  using ret_type = typename std::iterator_traits<InputIt>::value_type;
+  promise<std::vector<ret_type>> prom;
+  auto fut = prom.get_future();
+
+  if (begin != end) {
+    begin->wait();
+    (begin + 1)->wait();
+  }
+
+  std::thread t([begin, end](promise<std::vector<ret_type>> prom) {
+    try {
+      std::vector<ret_type> result;
+      begin->wait();
+      (begin + 1)->wait();
+      for (auto it = begin; it != end; ++it) {
+        it->wait();
+        result.emplace_back(std::move(*it));
+      }
+      prom.set(std::move(result));
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    } catch(std::exception& e) {
+      prom.set_exception(e);
+    }
+  }, std::move(prom));
+  t.detach();
+
+  return fut;
+}
 
 } // namespace concurrencyts
 

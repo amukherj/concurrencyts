@@ -4,28 +4,6 @@
 #include <iostream>
 #include <thread>
 
-namespace concurrencyts {
-
-latch::latch(size_t count) : count{count} {}
-
-void latch::count_down() {
-  std::unique_lock<std::mutex> ul{lock};
-  assert(count > 0);
-  if (--count == 0) {
-    ul.unlock();
-    done.notify_all();
-  }
-}
-
-void latch::wait() {
-  std::unique_lock<std::mutex> ul{lock};
-  if (count > 0) {
-    done.wait(ul, [this]()->bool { return count == 0; });
-  }
-}
-
-}
-
 int main() {
   concurrencyts::latch latch(7);
   for (int i = 0; i < 7; ++i) {

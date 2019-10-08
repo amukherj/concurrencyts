@@ -60,8 +60,28 @@ void async_to_promise() {
   std::cout << f0.get() << '\n';
 }
 
+void when_all() {
+  std::vector<concurrencyts::future<std::string>> futures;
+
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+    return "Hello";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    return "World";
+  }) );
+
+  auto rf = concurrencyts::when_all(futures.begin(), futures.end());
+  auto result = std::move(rf.get());
+  for (auto& r: result) {
+    std::cout << "Got: " << r.get() << '\n';
+  }
+}
+
 int main() {
-  // basic_future_state();
-  // promise_to_future();
+  basic_future_state();
+  promise_to_future();
   async_to_promise();
+  when_all();
 }
