@@ -1,22 +1,23 @@
-#ifndef CONCURRENCYTS_BARRIER_H
-#define CONCURRENCYTS_BARRIER_H
+#ifndef CONCURRENCYTS_LATCH_H
+#define CONCURRENCYTS_LATCH_H
 
 #include <condition_variable>
 #include <mutex>
 
 namespace concurrencyts {
 
-class barrier {
+class latch {
 public:
-  barrier(size_t count);
-  void arrive_and_wait();
+  latch(size_t count);
+  void count_down();
+  void wait();
 
 private:
   std::mutex lock;
-  size_t count;
   std::condition_variable done;
+  size_t count;
 };
 
 }
 
-#endif /* CONCURRENCYTS_BARRIER_H */
+#endif /* CONCURRENCYTS_LATCH_H */
