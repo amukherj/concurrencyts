@@ -6,7 +6,7 @@ This is a bare-bones implementation of the [Concurrency TS](http://www.open-std.
 
 This implementation provides the following abstractions.
 
-1. `future` with then continuations, corresponding `promise` (`concurrencyts::future` in `future.h`).
+1. `future` with `then continuations`, corresponding `promise` (`concurrencyts::future` in `future.h`).
 2. An implementation of `async` that returns `future`s of the above kind (`concurrencyts::async` in `future.h`).
 3. `when_all` for waiting on multiple futures till all are set (`concurrencyts::when_all` in `future.h`).
 4. `latch` for waiting till N threads have signaled the latch object (`concurrencyts::latch` in `latch.h`).
@@ -18,6 +18,8 @@ In the works:
 The rest of the abstractions are absent. While I intend to add them, I don't have a fixed schedule for doing so.
 
 ## Building
+You can use this library with a compiler that supports C++14 or later. It will possibly work with C++11 unchanged or with minor modifications. We don't use any mostrosity beyond simple GNUMake for building.
+
 The library is entirely header-only, and doesn't use any virtual functions, etc. Thus in order to use the future-related functionality, you just include the header `future.h`, and get all symbols from the namespace `concurrencyts`. Likewise with the other headers.
 
 You can check example usages of the abstractions by looking at the corresponding `.cc` files. You can also build and run them using:
@@ -26,4 +28,4 @@ You can check example usages of the abstractions by looking at the corresponding
     make bin/latch
     make bin/barrier
 
-There are no formal unit tests, but i intend to add them soon. We don't use any mostrosity beyond simple GNUMake for building.
+There are no formal unit tests, but I intend to add them soon.
