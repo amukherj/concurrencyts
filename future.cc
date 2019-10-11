@@ -79,9 +79,47 @@ void when_all() {
   }
 }
 
+void when_any() {
+  std::vector<concurrencyts::future<std::string>> futures;
+
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    return "Hello";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(9));
+    return "World";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(8));
+    return "I've";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(7));
+    return "been";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    return "waiting";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    return "for";
+  }) );
+  futures.push_back( concurrencyts::async([]()->std::string {
+    std::this_thread::sleep_for(std::chrono::seconds(6));
+    return "you";
+  }) );
+
+  auto rf = concurrencyts::when_any(futures.begin(), futures.end());
+  auto result = std::move(rf.get());
+  std::cout << result.futures[result.index].get() << '\n';
+}
+
 int main() {
-  basic_future_state();
-  promise_to_future();
-  async_to_promise();
-  when_all();
+  // basic_future_state();
+  // promise_to_future();
+  // async_to_promise();
+  // when_all();
+  when_any();
 }
