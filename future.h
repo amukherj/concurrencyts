@@ -1,6 +1,8 @@
 #ifndef CONCURRENCYTS_FUTURE_H
 #define CONCURRENCYTS_FUTURE_H
 
+#define __cpp_lib_experimental_future_continuations 201505
+
 #include <cassert>
 #include <condition_variable>
 #include <forward_list>

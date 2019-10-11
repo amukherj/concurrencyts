@@ -1,6 +1,8 @@
 #ifndef CONCURRENCYTS_BARRIER_H
 #define CONCURRENCYTS_BARRIER_H
 
+#define __cpp_lib_experimental_barrier 201505
+
 #include <condition_variable>
 #include <mutex>
 

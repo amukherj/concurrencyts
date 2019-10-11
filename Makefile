@@ -1,8 +1,7 @@
 CXXFLAGS=-pthread
-BINARIES=bin/barrier bin/latch
-LIBS=libs/libconcurrencyTS.a
+BINARIES=bin/barrier bin/latch bin/future
 
-all: dirs $(LIBS) $(BINARIES)
+all: dirs $(BINARIES)
 
 .PHONY: dirs
 dirs:
@@ -10,11 +9,7 @@ dirs:
 
 .PHONY: clean
 clean:
-	rm -rf *.o $(BINARIES) $(LIBS)
-
-libs/libconcurrencyTS.a: barrier.o latch.o
-	mkdir -p `dirname $@`
-	ar rc $@ $^
+	rm -rf *.o $(BINARIES)
 
 bin/%: %.cc %.h
-	$(CXX) -g -o $@ $< $(CXXFLAGS)
+	$(CXX) -std=c++14 -o $@ $< $(CXXFLAGS)

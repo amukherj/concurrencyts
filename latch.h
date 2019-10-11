@@ -1,6 +1,8 @@
 #ifndef CONCURRENCYTS_LATCH_H
 #define CONCURRENCYTS_LATCH_H
 
+#define __cpp_lib_experimental_latch 201505
+
 #include <condition_variable>
 #include <mutex>
 

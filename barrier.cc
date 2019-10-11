@@ -1,4 +1,4 @@
-#include "barrier.h"
+#include "concurrencyts.h"
 
 #include <cassert>
 #include <iostream>
@@ -6,7 +6,7 @@
 
 
 int main() {
-  concurrencyts::flex_barrier barrier(7, []() {
+  std::experimental::flex_barrier barrier(7, []() {
     std::cout << "All threads done\n";
   });
 

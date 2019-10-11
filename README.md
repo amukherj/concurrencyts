@@ -15,10 +15,13 @@ This implementation provides the following abstractions.
 
 The rest of the abstractions are absent. While I intend to add them, I don't have a fixed schedule for doing so.
 
-## Building
-You can use this library with a compiler that supports C++14 or later. It will possibly work with C++11 unchanged or with minor modifications. We don't use any mostrosity beyond simple GNUMake for building.
+## Compatibility
+You can use this library with a compiler that supports C++14 or later. It will possibly work with C++11 with minor modifications (change the `std::result_of_t<...>`s to `std::result_of<...>::type`. We don't use any mostrosity beyond simple GNUMake for building. It has been tested with g++/libstdc++ as well as clang++/libc++ on Linux. It works unchanged with C++17 and C++20.
 
+## Building
 The library is entirely header-only, and doesn't use any virtual functions, etc. Thus in order to use the future-related functionality, you just include the header `future.h`, and get all symbols from the namespace `concurrencyts`. Likewise with the other headers.
+
+If you would rather use the `std::experimental` namespace, just `#include "concurrencyts.h"`. Don't include any other header individually.
 
 You can check example usages of the abstractions by looking at the corresponding `.cc` files. You can also build and run them using:
 
