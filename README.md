@@ -9,11 +9,9 @@ This implementation provides the following abstractions.
 1. `future` with `then continuations`, corresponding `promise` (`concurrencyts::future` in `future.h`).
 2. An implementation of `async` that returns `future`s of the above kind (`concurrencyts::async` in `future.h`).
 3. `when_all` for waiting on multiple futures till all are set (`concurrencyts::when_all` in `future.h`).
-4. `latch` for waiting till N threads have signaled the latch object (`concurrencyts::latch` in `latch.h`).
-5. `barrier` and `flex_barrier` for upto N threads to block till all N have arrived (`concurrencyts::barrier` and `concurrencyts::flex_barrier` in `barrier.h`). Only `arrive_and_wait` is implemented, while `arrive_and_drop` is missing.
-
-In the works:
-1. `when_any` akin to `when_all` but signaled as soon as any one future is ready.
+4. `when_any` akin to `when_all` but signaled as soon as any one future is ready.
+5. `latch` for waiting till N threads have signaled the latch object (`concurrencyts::latch` in `latch.h`).
+6. `barrier` and `flex_barrier` for upto N threads to block till all N have arrived (`concurrencyts::barrier` and `concurrencyts::flex_barrier` in `barrier.h`). Only `arrive_and_wait` is implemented, while `arrive_and_drop` is missing.
 
 The rest of the abstractions are absent. While I intend to add them, I don't have a fixed schedule for doing so.
 
