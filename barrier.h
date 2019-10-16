@@ -11,7 +11,7 @@ namespace concurrencyts {
 template <typename T>
 class barrier_base {
 public:
-  typedef void(*void_func)();
+  typedef int(*compl_func)();
   barrier_base(size_t count) : max_count{count}, count{count}, released_count{0} {}
 
   void arrive_and_wait() {
@@ -20,6 +20,18 @@ public:
   
     if (--count == 0) {
       ul.unlock();
+
+      auto ffunc = static_cast<T*>(this)->final_func();
+      if (ffunc) {
+        // run the completion block
+        auto tmp_count = ffunc();
+        if (tmp_count >= 0) {
+          // readjust max_count for next phase of barrier.
+          max_count = tmp_count;
+        }
+      }
+
+      // release all waiting threads
       done.notify_all();
     } else {
       done.wait(ul, [this]()->bool { return count == 0; });
@@ -31,16 +43,13 @@ public:
       count = max_count;
       released_count = 0;
       ul.unlock();
-      auto ffunc = static_cast<T*>(this)->final_func();
-      if (ffunc) {
-        ffunc();
-      }
+      // allow all waiting threads
       allow.notify_all();
     }
   }
 
 private:
-  const size_t max_count;
+  size_t max_count;
   std::mutex lock;
   std::condition_variable allow;
   std::condition_variable done;
@@ -52,21 +61,21 @@ class barrier : public barrier_base<barrier> {
 public:
   barrier(size_t count) : barrier_base{count} {}
 
-  void_func final_func() {
+  compl_func final_func() {
     return nullptr;
   }
 };
 
 class flex_barrier : public barrier_base<flex_barrier> {
 public:
-  flex_barrier(size_t count, void_func fnl_func) : barrier_base{count}, fnl_func{fnl_func} {}
+  flex_barrier(size_t count, compl_func fnl_func) : barrier_base{count}, fnl_func{fnl_func} {}
 
-  void_func final_func() {
+  compl_func final_func() {
     return fnl_func;
   }
 
 private:
-  void_func fnl_func;
+  compl_func fnl_func;
 };
 
 }
